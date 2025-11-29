@@ -323,24 +323,59 @@ class Tree234:
             self._fix_child(node, i)
     
     def _fix_child(self, parent, index):
-        """Fix a child that might have too few keys after deletion"""
-        if index >= len(parent.children):
-            return
-        
         child = parent.children[index]
-        
-        # If child has at least one key, it's fine
+
         if len(child.keys) > 0:
             return
-        
-        # Child is empty - need to handle this
-        if len(child.children) == 0:
-            # It's a leaf with no keys - remove it
+
+        if index > 0 and len(parent.children[index - 1].keys) > 1:
+            left_sibling = parent.children[index - 1]
+
+            child.keys.insert(0, parent.keys[index - 1])
+
+            parent.keys[index - 1] = left_sibling.keys.pop()
+
+            if not left_sibling.is_leaf():
+                child.children.insert(0, left_sibling.children.pop())
+
+            return
+
+        if index < len(parent.children) - 1 and len(parent.children[index + 1].keys) > 1:
+            right_sibling = parent.children[index + 1]
+
+            child.keys.append(parent.keys[index])
+
+            parent.keys[index] = right_sibling.keys.pop(0)
+
+            if not right_sibling.is_leaf():
+                child.children.append(right_sibling.children.pop(0))
+
+            return
+
+        if index > 0:
+            # Merge com irmão esquerdo
+            left_sibling = parent.children[index - 1]
+
+            left_sibling.keys.append(parent.keys.pop(index - 1))
+
+            left_sibling.keys.extend(child.keys)
+
+            if not child.is_leaf():
+                left_sibling.children.extend(child.children)
+
             parent.children.pop(index)
-        elif len(child.children) == 1:
-            # Replace child with its only child
-            parent.children[index] = child.children[0]
-            parent.children[index].parent = parent
+
+        else:
+            right_sibling = parent.children[index + 1]
+
+            child.keys.append(parent.keys.pop(index))
+
+            child.keys.extend(right_sibling.keys)
+
+            if not right_sibling.is_leaf():
+                child.children.extend(right_sibling.children)
+
+            parent.children.pop(index + 1)
     
     def _get_predecessor(self, node, index):
         current = node.children[index]
