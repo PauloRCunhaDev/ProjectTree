@@ -518,6 +518,186 @@ class SplayTree:
             node = node.right
         return node
 
+# ==================== K-D TREE ====================
+class KDNode:
+    def __init__(self, point, axis):
+        self.point = point
+        self.axis = axis
+        self.left = None
+        self.right = None
+        self.parent = None
+
+class KDTree:
+    def __init__(self, k=2):
+        """
+        Initialize a k-D tree
+        k: number of dimensions (default is 2 for 2D points)
+        """
+        self.root = None
+        self.k = k
+    
+    def insert(self, point):
+        """Insert a point (list of coordinates) into the k-D tree"""
+        if len(point) != self.k:
+            raise ValueError(f"Point must have {self.k} dimensions")
+        
+        if not self.root:
+            self.root = KDNode(point, 0)
+            return
+        
+        self._insert_recursive(self.root, point, 0)
+    
+    def _insert_recursive(self, node, point, depth):
+        axis = depth % self.k
+        
+        if point[axis] < node.point[axis]:
+            if node.left is None:
+                node.left = KDNode(point, axis)
+                node.left.parent = node
+            else:
+                self._insert_recursive(node.left, point, depth + 1)
+        else:
+            if node.right is None:
+                node.right = KDNode(point, axis)
+                node.right.parent = node
+            else:
+                self._insert_recursive(node.right, point, depth + 1)
+    
+    def search(self, point):
+        """Search for a specific point in the tree"""
+        return self._search_recursive(self.root, point, 0)
+    
+    def _search_recursive(self, node, point, depth):
+        if node is None:
+            return None
+        
+        if node.point == point:
+            return node
+        
+        axis = depth % self.k
+        
+        if point[axis] < node.point[axis]:
+            return self._search_recursive(node.left, point, depth + 1)
+        else:
+            return self._search_recursive(node.right, point, depth + 1)
+    
+    def delete(self, point):
+        """Delete a point from the tree"""
+        self.root = self._delete_recursive(self.root, point, 0)
+    
+    def _delete_recursive(self, node, point, depth):
+        if node is None:
+            return None
+        
+        axis = depth % self.k
+        
+        if node.point == point:
+            # Node to delete found
+            if node.right is not None:
+                # Find minimum in right subtree
+                min_node = self._find_min(node.right, axis, depth + 1)
+                node.point = min_node.point
+                node.right = self._delete_recursive(node.right, min_node.point, depth + 1)
+            elif node.left is not None:
+                # Find minimum in left subtree
+                min_node = self._find_min(node.left, axis, depth + 1)
+                node.point = min_node.point
+                node.right = self._delete_recursive(node.left, min_node.point, depth + 1)
+                node.left = None
+            else:
+                # Leaf node
+                return None
+            return node
+        
+        if point[axis] < node.point[axis]:
+            node.left = self._delete_recursive(node.left, point, depth + 1)
+        else:
+            node.right = self._delete_recursive(node.right, point, depth + 1)
+        
+        return node
+    
+    def _find_min(self, node, axis, depth):
+        """Find node with minimum value on given axis"""
+        if node is None:
+            return None
+        
+        current_axis = depth % self.k
+        
+        if current_axis == axis:
+            if node.left is None:
+                return node
+            return self._find_min(node.left, axis, depth + 1)
+        
+        # Check all subtrees
+        min_node = node
+        left_min = self._find_min(node.left, axis, depth + 1)
+        right_min = self._find_min(node.right, axis, depth + 1)
+        
+        if left_min and left_min.point[axis] < min_node.point[axis]:
+            min_node = left_min
+        if right_min and right_min.point[axis] < min_node.point[axis]:
+            min_node = right_min
+        
+        return min_node
+    
+    def nearest_neighbor(self, target_point):
+        """Find the nearest point to the target point"""
+        if not self.root:
+            return None
+        
+        best = [self.root, float('inf')]
+        self._nearest_recursive(self.root, target_point, 0, best)
+        return best[0]
+    
+    def _nearest_recursive(self, node, target, depth, best):
+        if node is None:
+            return
+        
+        dist = self._distance(node.point, target)
+        if dist < best[1]:
+            best[0] = node
+            best[1] = dist
+        
+        axis = depth % self.k
+        diff = target[axis] - node.point[axis]
+        
+        if diff < 0:
+            near_subtree = node.left
+            far_subtree = node.right
+        else:
+            near_subtree = node.right
+            far_subtree = node.left
+        
+        self._nearest_recursive(near_subtree, target, depth + 1, best)
+        
+        if diff * diff < best[1]:
+            self._nearest_recursive(far_subtree, target, depth + 1, best)
+    
+    def _distance(self, point1, point2):
+        return sum((a - b) ** 2 for a, b in zip(point1, point2))
+    
+    def range_search(self, min_bounds, max_bounds):
+        result = []
+        self._range_search_recursive(self.root, min_bounds, max_bounds, 0, result)
+        return result
+    
+    def _range_search_recursive(self, node, min_bounds, max_bounds, depth, result):
+        if node is None:
+            return
+        
+        in_range = all(min_bounds[i] <= node.point[i] <= max_bounds[i] 
+                      for i in range(self.k))
+        if in_range:
+            result.append(node)
+        
+        axis = depth % self.k
+        
+        if min_bounds[axis] <= node.point[axis]:
+            self._range_search_recursive(node.left, min_bounds, max_bounds, depth + 1, result)
+        
+        if max_bounds[axis] >= node.point[axis]:
+            self._range_search_recursive(node.right, min_bounds, max_bounds, depth + 1, result)
+
 # ==================== GUI ====================
 class TreeVisualizerApp:
     def __init__(self, root):
@@ -529,6 +709,7 @@ class TreeVisualizerApp:
         self.tree_type = tk.StringVar(value='redblack')
         self.tree = None
         self.found_node = None
+        self.view_mode = 'tree'
         
         self._create_widgets()
         self._initialize_tree()
@@ -561,6 +742,11 @@ class TreeVisualizerApp:
                       bg='#334155', fg='white', selectcolor='#10b981',
                       activebackground='#334155', activeforeground='white').pack(side=tk.LEFT, padx=5)
         
+        tk.Radiobutton(type_frame, text="k-D Tree (2D)", variable=self.tree_type,
+                      value='kdtree', command=self._initialize_tree, font=('Arial', 11),
+                      bg='#334155', fg='white', selectcolor='#f59e0b',
+                      activebackground='#334155', activeforeground='white').pack(side=tk.LEFT, padx=5)
+        
         # Controls
         control_frame = tk.Frame(self.root, bg='#334155', relief=tk.RAISED, bd=2)
         control_frame.pack(pady=10, padx=20, fill=tk.X)
@@ -587,6 +773,11 @@ class TreeVisualizerApp:
         tk.Button(control_frame, text="Limpar", command=self._initialize_tree,
                  bg='#64748b', fg='white', font=('Arial', 11, 'bold'),
                  padx=15, pady=5).pack(side=tk.LEFT, padx=5)
+        
+        self.cartesian_button = tk.Button(control_frame, text="Plano Cartesiano", command=self._toggle_view,
+                 bg='#8b5cf6', fg='white', font=('Arial', 11, 'bold'),
+                 padx=15, pady=5)
+        self.cartesian_button.pack(side=tk.LEFT, padx=5)
         
         # Message
         self.message_var = tk.StringVar(value="Árvore inicializada")
@@ -620,8 +811,18 @@ class TreeVisualizerApp:
             self.legend_label.config(text="🔴 Nó Vermelho  ⚫ Nó Preto")
         elif tree_type == '234':
             self.legend_label.config(text="Cada caixa pode conter 1, 2 ou 3 chaves")
-        else:
+        elif tree_type == 'splay':
             self.legend_label.config(text="O nó acessado mais recentemente é movido para a raiz")
+        else:  # kdtree
+            self.legend_label.config(text="Pontos 2D particionados por coordenadas X e Y alternadamente")
+    
+    def _toggle_view(self):
+        if self.tree_type.get() != 'kdtree':
+            messagebox.showinfo("Info", "Visualização cartesiana disponível apenas para k-D Tree")
+            return
+        self.view_mode = 'cartesian' if self.view_mode == 'tree' else 'tree'
+        self.cartesian_button.config(text="Vista em Árvore" if self.view_mode == 'cartesian' else "Plano Cartesiano")
+        self._draw_tree()
     
     def _initialize_tree(self):
         tree_type = self.tree_type.get()
@@ -629,49 +830,92 @@ class TreeVisualizerApp:
             self.tree = RedBlackTree()
         elif tree_type == '234':
             self.tree = Tree234()
-        else:
+        elif tree_type == 'splay':
             self.tree = SplayTree()
+        else:  # kdtree
+            self.tree = KDTree(k=2)
         
         self.found_node = None
         self.message_var.set("Árvore inicializada")
         self._update_legend()
+        self.view_mode = 'tree'
+        self.cartesian_button.config(text="Plano Cartesiano")
         self._draw_tree()
     
     def _insert(self):
         try:
-            value = int(self.value_entry.get())
-            self.tree.insert(value)
+            value_str = self.value_entry.get()
+            
+            if self.tree_type.get() == 'kdtree':
+                # For k-D tree, expect format like "10,20" for 2D point
+                coords = [int(x.strip()) for x in value_str.split(',')]
+                if len(coords) != 2:
+                    raise ValueError("Para k-D Tree, insira 2 valores separados por vírgula (ex: 10,20)")
+                self.tree.insert(coords)
+                self.message_var.set(f"Ponto {coords} inserido na k-D tree")
+            else:
+                value = int(value_str)
+                self.tree.insert(value)
+                self.message_var.set(f"Valor {value} inserido e árvore balanceada")
+            
             self.found_node = None
-            self.message_var.set(f"Valor {value} inserido e árvore balanceada")
             self.value_entry.delete(0, tk.END)
             self._draw_tree()
-        except ValueError:
-            messagebox.showerror("Erro", "Por favor, insira um número válido")
+        except ValueError as e:
+            if "k-D Tree" in str(e):
+                messagebox.showerror("Erro", str(e))
+            else:
+                messagebox.showerror("Erro", "Por favor, insira um número válido (ou x,y para k-D Tree)")
     
     def _delete(self):
         try:
-            value = int(self.value_entry.get())
-            self.tree.delete(value)
+            value_str = self.value_entry.get()
+            
+            if self.tree_type.get() == 'kdtree':
+                coords = [int(x.strip()) for x in value_str.split(',')]
+                if len(coords) != 2:
+                    raise ValueError("Para k-D Tree, insira 2 valores separados por vírgula")
+                self.tree.delete(coords)
+                self.message_var.set(f"Ponto {coords} removido da k-D tree")
+            else:
+                value = int(value_str)
+                self.tree.delete(value)
+                self.message_var.set(f"Valor {value} removido e árvore balanceada")
+            
             self.found_node = None
-            self.message_var.set(f"Valor {value} removido e árvore balanceada")
             self.value_entry.delete(0, tk.END)
             self._draw_tree()
         except ValueError:
-            messagebox.showerror("Erro", "Por favor, insira um número válido")
+            messagebox.showerror("Erro", "Por favor, insira um número válido (ou x,y para k-D Tree)")
     
     def _search(self):
         try:
-            value = int(self.value_entry.get())
-            result = self.tree.search(value)
-            if result:
-                self.found_node = result
-                self.message_var.set(f"Valor {value} encontrado na árvore!")
+            value_str = self.value_entry.get()
+            
+            if self.tree_type.get() == 'kdtree':
+                coords = [int(x.strip()) for x in value_str.split(',')]
+                if len(coords) != 2:
+                    raise ValueError("Para k-D Tree, insira 2 valores separados por vírgula")
+                result = self.tree.search(coords)
+                if result:
+                    self.found_node = result
+                    self.message_var.set(f"Ponto {coords} encontrado na árvore!")
+                else:
+                    self.found_node = None
+                    self.message_var.set(f"Ponto {coords} não encontrado na árvore")
             else:
-                self.found_node = None
-                self.message_var.set(f"Valor {value} não encontrado na árvore")
+                value = int(value_str)
+                result = self.tree.search(value)
+                if result:
+                    self.found_node = result
+                    self.message_var.set(f"Valor {value} encontrado na árvore!")
+                else:
+                    self.found_node = None
+                    self.message_var.set(f"Valor {value} não encontrado na árvore")
+            
             self._draw_tree()
         except ValueError:
-            messagebox.showerror("Erro", "Por favor, insira um número válido")
+            messagebox.showerror("Erro", "Por favor, insira um número válido (ou x,y para k-D Tree)")
     
     def _draw_tree(self):
         self.canvas.delete("all")
@@ -682,8 +926,12 @@ class TreeVisualizerApp:
         width = self.canvas.winfo_width() or 1100
         height = self.canvas.winfo_height() or 500
         
-        if self.tree_type.get() == '234':
+        if self.tree_type.get() == 'kdtree' and self.view_mode == 'cartesian':
+            self._draw_cartesian(width, height)
+        elif self.tree_type.get() == '234':
             self._draw_234_tree(self.tree.root, width // 2, 40, width // 4)
+        elif self.tree_type.get() == 'kdtree':
+            self._draw_kdtree(self.tree.root, width // 2, 40, width // 4, 0)
         else:
             self._draw_binary_tree(self.tree.root, width // 2, 40, width // 4)
     
@@ -716,6 +964,44 @@ class TreeVisualizerApp:
         self.canvas.create_text(x, y, text=str(node.value), 
                                fill='white', font=('Arial', 12, 'bold'))
     
+    def _draw_kdtree(self, node, x, y, offset, depth):
+        """Draw k-D tree with alternating split axes"""
+        if not node:
+            return
+        
+        axis = depth % 2  # 0 for x-axis, 1 for y-axis
+        
+        # Draw connections
+        if node.left:
+            self.canvas.create_line(x, y, x - offset, y + 80, fill='#64748b', width=2)
+            self._draw_kdtree(node.left, x - offset, y + 80, offset / 2, depth + 1)
+        
+        if node.right:
+            self.canvas.create_line(x, y, x + offset, y + 80, fill='#64748b', width=2)
+            self._draw_kdtree(node.right, x + offset, y + 80, offset / 2, depth + 1)
+        
+        # Color based on split axis - orange for X-axis, amber for Y-axis
+        color = '#f97316' if axis == 0 else '#f59e0b'
+        
+        # Highlight if found
+        if node == self.found_node:
+            self.canvas.create_oval(x - 35, y - 30, x + 35, y + 30, 
+                                   fill='#fbbf24', outline='#10b981', width=3)
+        
+        # Draw node as oval
+        self.canvas.create_oval(x - 30, y - 25, x + 30, y + 25, 
+                               fill=color, outline='#475569', width=2)
+        
+        # Display point coordinates
+        point_text = f"({node.point[0]},{node.point[1]})"
+        self.canvas.create_text(x, y, text=point_text, 
+                               fill='white', font=('Arial', 10, 'bold'))
+        
+        # Show split axis indicator
+        axis_text = "X" if axis == 0 else "Y"
+        self.canvas.create_text(x, y - 40, text=axis_text, 
+                               fill='#64748b', font=('Arial', 8, 'bold'))
+    
     def _draw_234_tree(self, node, x, y, offset):
         if not node or len(node.keys) == 0:
             return
@@ -747,6 +1033,57 @@ class TreeVisualizerApp:
             key_x = x - node_width // 2 + 20 + i * 40
             self.canvas.create_text(key_x, y, text=str(key),
                                    fill='white', font=('Arial', 12, 'bold'))
+    
+    def _collect_points(self, node, points):
+        if node:
+            points.append(node.point)
+            self._collect_points(node.left, points)
+            self._collect_points(node.right, points)
+    
+    def _draw_cartesian(self, width, height):
+        points = []
+        self._collect_points(self.tree.root, points)
+        if not points:
+            return
+        
+        min_x = min(p[0] for p in points)
+        max_x = max(p[0] for p in points)
+        min_y = min(p[1] for p in points)
+        max_y = max(p[1] for p in points)
+        
+        # Draw axes
+        self.canvas.create_line(50, height-50, width-50, height-50, fill='black', width=2)  # x-axis
+        self.canvas.create_line(50, 50, 50, height-50, fill='black', width=2)  # y-axis
+        
+        # Labels
+        self.canvas.create_text(width-25, height-25, text="X", font=('Arial', 12, 'bold'))
+        self.canvas.create_text(25, 25, text="Y", font=('Arial', 12, 'bold'))
+        
+        # Plot points
+        for p in points:
+            x = 50 + (p[0] - min_x) / (max_x - min_x) * (width - 100) if max_x != min_x else width/2
+            y = height - 50 - (p[1] - min_y) / (max_y - min_y) * (height - 100) if max_y != min_y else height/2
+            self.canvas.create_oval(x-4, y-4, x+4, y+4, fill='red')
+            self.canvas.create_text(x+10, y, text=f"({p[0]},{p[1]})", font=('Arial', 8))
+        
+        # Draw splits
+        self._draw_splits(self.tree.root, min_x, max_x, min_y, max_y, 0, width, height)
+    
+    def _draw_splits(self, node, min_x, max_x, min_y, max_y, depth, width, height):
+        if not node:
+            return
+        
+        axis = depth % 2
+        if axis == 0:  # vertical line at x = node.point[0]
+            x = 50 + (node.point[0] - min_x) / (max_x - min_x) * (width - 100) if max_x != min_x else width/2
+            self.canvas.create_line(x, 50, x, height-50, fill='red', width=1, dash=(5,5))
+            self._draw_splits(node.left, min_x, node.point[0], min_y, max_y, depth+1, width, height)
+            self._draw_splits(node.right, node.point[0], max_x, min_y, max_y, depth+1, width, height)
+        else:  # horizontal line at y = node.point[1]
+            y = height - 50 - (node.point[1] - min_y) / (max_y - min_y) * (height - 100) if max_y != min_y else height/2
+            self.canvas.create_line(50, y, width-50, y, fill='blue', width=1, dash=(5,5))
+            self._draw_splits(node.left, min_x, max_x, min_y, node.point[1], depth+1, width, height)
+            self._draw_splits(node.right, min_x, max_x, node.point[1], max_y, depth+1, width, height)
 
 # Main
 if __name__ == "__main__":
