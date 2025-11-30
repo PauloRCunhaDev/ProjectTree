@@ -15,6 +15,7 @@ class RedBlackTree:
     def __init__(self):
         self.root = None
     
+    # inserção
     def insert(self, value):
         node = RBNode(value)
         if not self.root:
@@ -42,6 +43,7 @@ class RedBlackTree:
         
         self._fix_insert(node)
     
+    # balanceamento da inserção
     def _fix_insert(self, node):
         while node.parent and node.parent.color == 'RED':
             if node.parent == node.parent.parent.left:
@@ -74,6 +76,7 @@ class RedBlackTree:
                     self._rotate_left(node.parent.parent)
         self.root.color = 'BLACK'
     
+    # função para rotacionar para a esquerda
     def _rotate_left(self, node):
         right = node.right
         node.right = right.left
@@ -89,6 +92,7 @@ class RedBlackTree:
         right.left = node
         node.parent = right
     
+    # função para rotacionar para a direita
     def _rotate_right(self, node):
         left = node.left
         node.left = left.right
@@ -104,6 +108,7 @@ class RedBlackTree:
         left.right = node
         node.parent = left
     
+    # função de busca
     def search(self, value):
         current = self.root
         while current:
@@ -115,46 +120,150 @@ class RedBlackTree:
                 current = current.right
         return None
     
+    # verificar remoção
     def delete(self, value):
         node = self.search(value)
         if not node:
             return
         self._delete_node(node)
     
+    # função para remover
     def _delete_node(self, node):
         y = node
         y_original_color = y.color
-        
+
+        # x é o nó que ocupa a posição de y apos a remoção
         if not node.left:
             x = node.right
+            parent = node.parent
             self._transplant(node, node.right)
         elif not node.right:
             x = node.left
+            parent = node.parent
             self._transplant(node, node.left)
         else:
-            y = self._minimum(node.right)
+            y = self._minimum(node.right)       # troca
             y_original_color = y.color
             x = y.right
+            parent = y.parent if y.parent != node else y
             if y.parent == node:
                 if x:
                     x.parent = y
             else:
                 self._transplant(y, y.right)
                 y.right = node.right
-                y.right.parent = y
+                if y.right:
+                    y.right.parent = y
             self._transplant(node, y)
             y.left = node.left
-            y.left.parent = y
+            if y.left:
+                y.left.parent = y
             y.color = node.color
-        
-        if y_original_color == 'BLACK' and x:
-            self._fix_delete(x)
-    
+
+        # caso de remoção de nó dupla-preto
+        if y_original_color == 'BLACK':
+            if x:
+                self._fix_delete(x)
+            else:
+                # cria um nó preto temporário para representar a dupla-preto
+                self._fix_delete_dummy(parent)
+
+    def _fix_delete_dummy(self, parent):
+        # Cria um nó preto ligado ao lado correto para fazer a correção
+        dummy = RBNode(None)
+        dummy.color = 'BLACK'
+        dummy.parent = parent
+        if parent:
+            if not parent.left and (parent.right is None or parent.right.value is not None):
+                parent.left = dummy
+            elif not parent.right and (parent.left is None or parent.left.value is not None):
+                parent.right = dummy
+            else:
+                if not parent.left:
+                    parent.left = dummy
+                else:
+                    parent.right = dummy
+        self._fix_delete(dummy)
+        # Remove o nó temporario
+        if dummy.parent:
+            if dummy.parent.left == dummy:
+                dummy.parent.left = None
+            elif dummy.parent.right == dummy:
+                dummy.parent.right = None
+
+    # função para balancear a remoção
+    def _fix_delete(self, node):
+        while node != self.root and self._is_black(node):
+            if not node.parent:
+                break
+            if node == node.parent.left:
+                sibling = node.parent.right
+                # Caso 2: irmão vermelho
+                if sibling and sibling.color == 'RED':
+                    sibling.color = 'BLACK'
+                    node.parent.color = 'RED'
+                    self._rotate_left(node.parent)
+                    sibling = node.parent.right
+                # Caso 3: irmão preto com filhos pretos
+                if sibling and self._is_black(sibling.left) and self._is_black(sibling.right):
+                    sibling.color = 'RED'
+                    node = node.parent
+                else:
+                    # Caso 4: irmão preto com filho próximo vermelho
+                    if sibling and self._is_black(sibling.right):
+                        if sibling.left:
+                            sibling.left.color = 'BLACK'
+                        if sibling:
+                            sibling.color = 'RED'
+                        self._rotate_right(sibling)
+                        sibling = node.parent.right
+                    # Caso 5: irmão preto com filho distante vermelho
+                    if sibling:
+                        sibling.color = node.parent.color
+                    node.parent.color = 'BLACK'
+                    if sibling and sibling.right:
+                        sibling.right.color = 'BLACK'
+                    self._rotate_left(node.parent)
+                    node = self.root
+            else:
+                sibling = node.parent.left
+                if sibling and sibling.color == 'RED':
+                    sibling.color = 'BLACK'
+                    node.parent.color = 'RED'
+                    self._rotate_right(node.parent)
+                    sibling = node.parent.left
+                if sibling and self._is_black(sibling.left) and self._is_black(sibling.right):
+                    sibling.color = 'RED'
+                    node = node.parent
+                else:
+                    if sibling and self._is_black(sibling.left):
+                        if sibling.right:
+                            sibling.right.color = 'BLACK'
+                        if sibling:
+                            sibling.color = 'RED'
+                        self._rotate_left(sibling)
+                        sibling = node.parent.left
+                    if sibling:
+                        sibling.color = node.parent.color
+                    node.parent.color = 'BLACK'
+                    if sibling and sibling.left:
+                        sibling.left.color = 'BLACK'
+                    self._rotate_right(node.parent)
+                    node = self.root
+        # garante que o nó final seja preto
+        if node:
+            node.color = 'BLACK'
+
+    # altera cor para preto
+    def _is_black(self, node):
+        return node is None or node.color == 'BLACK'
+
     def _minimum(self, node):
         while node.left:
             node = node.left
         return node
     
+    # realiza a troca
     def _transplant(self, u, v):
         if not u.parent:
             self.root = v
@@ -164,60 +273,6 @@ class RedBlackTree:
             u.parent.right = v
         if v:
             v.parent = u.parent
-    
-    def _fix_delete(self, node):
-        while node != self.root and node.color == 'BLACK':
-            if node == node.parent.left:
-                sibling = node.parent.right
-                if sibling and sibling.color == 'RED':
-                    sibling.color = 'BLACK'
-                    node.parent.color = 'RED'
-                    self._rotate_left(node.parent)
-                    sibling = node.parent.right
-                if sibling and (not sibling.left or sibling.left.color == 'BLACK') and \
-                   (not sibling.right or sibling.right.color == 'BLACK'):
-                    sibling.color = 'RED'
-                    node = node.parent
-                else:
-                    if sibling and (not sibling.right or sibling.right.color == 'BLACK'):
-                        if sibling.left:
-                            sibling.left.color = 'BLACK'
-                        sibling.color = 'RED'
-                        self._rotate_right(sibling)
-                        sibling = node.parent.right
-                    if sibling:
-                        sibling.color = node.parent.color
-                        node.parent.color = 'BLACK'
-                        if sibling.right:
-                            sibling.right.color = 'BLACK'
-                        self._rotate_left(node.parent)
-                    node = self.root
-            else:
-                sibling = node.parent.left
-                if sibling and sibling.color == 'RED':
-                    sibling.color = 'BLACK'
-                    node.parent.color = 'RED'
-                    self._rotate_right(node.parent)
-                    sibling = node.parent.left
-                if sibling and (not sibling.right or sibling.right.color == 'BLACK') and \
-                   (not sibling.left or sibling.left.color == 'BLACK'):
-                    sibling.color = 'RED'
-                    node = node.parent
-                else:
-                    if sibling and (not sibling.left or sibling.left.color == 'BLACK'):
-                        if sibling.right:
-                            sibling.right.color = 'BLACK'
-                        sibling.color = 'RED'
-                        self._rotate_left(sibling)
-                        sibling = node.parent.left
-                    if sibling:
-                        sibling.color = node.parent.color
-                        node.parent.color = 'BLACK'
-                        if sibling.left:
-                            sibling.left.color = 'BLACK'
-                        self._rotate_right(node.parent)
-                    node = self.root
-        node.color = 'BLACK'
 
 # ==================== 2-3-4 TREE ====================
 class Node234:
